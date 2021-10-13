@@ -9,6 +9,7 @@
 #include "pinocchio/parsers/urdf/utils.hpp"
 #include "pinocchio/parsers/urdf/model.hxx"
 
+
 #include <vector>
 #include <string>
 #include <cmath>
@@ -25,6 +26,9 @@
 #include <iostream>
 
 #include "rotation.hpp"
+#include "matlab.hpp"
+
+#include "mat.h"
 
 
 typedef struct {
@@ -32,6 +36,7 @@ typedef struct {
 	Eigen::Affine3d target;
 	int JOINT_ID;
   	pinocchio::Data data;
+	std::vector<double> q0;
 } params;
 
 
@@ -54,9 +59,12 @@ double cost(const std::vector<double> & q_nlopt, std::vector<double> &grad, void
 	pinocchio::Data pinocchio_data = p->data;
 
 	Eigen::VectorXd q;
+	Eigen::VectorXd q0;
 	q.resize(q_nlopt.size());
+	q0.resize(q_nlopt.size());
 	for(int i = 0; i < q_nlopt.size(); i++) {
 		q(i) = q_nlopt[i];
+		q0(i) = p->q0[i];
 	}
 
 	// calculate current end effector position
@@ -85,7 +93,16 @@ double cost(const std::vector<double> & q_nlopt, std::vector<double> &grad, void
 	Eigen::Vector3d orientation_cost(3,1);
 	orientation_cost = eta_e*epsilon_d - eta_d*epsilon_e - skew_of_epsilon_d*epsilon_e;
 
-	return position_cost.norm() + orientation_cost.transpose()*orientation_cost;
+	// Initial condition cost
+	Eigen::MatrixXd W(q_nlopt.size(),q_nlopt.size());
+	W.diagonal().fill(0.0001);
+	double initial_cost = (q - q0).transpose()*W*(q-q0);
+
+	Eigen::MatrixXd K;
+	K.diagonal().fill(0.01);
+
+
+	return position_cost.norm() + orientation_cost.transpose()*orientation_cost + initial_cost;
 }
 
 
@@ -186,7 +203,7 @@ int main(int argc, char ** argv)
 
 	// **** Position Target ****
 	Eigen::Vector3d position_target;
-	position_target <<  0.0294,  0.0523,  -0.4529;
+	position_target <<  0.0294,  0.0523,  -0.3529;
 	target.translation() = position_target;
 
 	// **** Orientation Target ****
@@ -195,19 +212,19 @@ int main(int argc, char ** argv)
 	// Target euler angles
 	Eigen::Matrix<double, Eigen::Dynamic, 1> Thetad;
 	Thetad.resize(3,1);
-	Thetad << 0, 1.5657, 0.0000;
+	Thetad << 0, 1.571, 0.0000;
 	rpy2rot(Thetad, Rd);
 	target.linear() = Rd;
 
-	params pinocchio_data[4] = {model, target, 6, data};
+	// Initial conditions
+	std::vector<double> q_nlopt(20);
+	std::fill(q_nlopt.begin(), q_nlopt.end(), 0);
+	params pinocchio_data[4] = {model, target, 6, data, q_nlopt};
 
 	auto t_start_4 = std::chrono::high_resolution_clock::now();
 	nlopt::opt opt(nlopt::LN_COBYLA, 20);
 	opt.set_min_objective(cost, &pinocchio_data[0]);
 	opt.set_xtol_rel(1e-4);
-	std::vector<double> q_nlopt(20);
-	// Initial conditions
-	std::fill(q_nlopt.begin(), q_nlopt.end(), 0);
 	double minf;
 	// Run the optimizer
 	std::cout << opt.optimize(q_nlopt, minf) << std::endl;
@@ -240,5 +257,13 @@ int main(int argc, char ** argv)
 
 	std::cout << "Joint 6 position : " << data.oMi[6].translation().transpose() << std::endl;
 	std::cout << "Joint 6 rotation matrix" << data.oMi[6].rotation() << std::endl;
+
+	const std::string file_name = "../q.csv" ;
+	const std::string vec_name = "vector of joint angles";
+	std::ofstream file(file_name);
+	save_vector_as_matrix(vec_name,q_nlopt,file);
+
+	// system("visualize.sh");
+	// std::cin.ignore();
 
 }
