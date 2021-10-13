@@ -22,14 +22,14 @@ Eigen::Matrix3d skew(Eigen::Vector3d u) {
 // Generator matrix
 Eigen::Matrix4d generatorMatrix(Eigen::MatrixXd x) {
   Eigen::Vector3d x13;
-  x13 << x(1), x(2), x(3);
+  x13 << x(0), x(1), x(2);
   Eigen::Vector3d x46;
-  x46 << x(4), x(5), x(6);
+  x46 << x(3), x(4), x(5);
   Eigen::Matrix3d skew_x46 = skew(x46);
   Eigen::Matrix4d GG;
-  GG << skew_x46(1), skew_x46(2), skew_x46(3), x13(1),
-       skew_x46(4), skew_x46(5), skew_x46(6), x13(2),
-       skew_x46(7), skew_x46(8), skew_x46(9), x13(3),
+  GG << skew_x46(0), skew_x46(1), skew_x46(2), x13(0),
+       skew_x46(3), skew_x46(4), skew_x46(5), x13(1),
+       skew_x46(6), skew_x46(7), skew_x46(8), x13(2),
        0.0, 0.0, 0.0, 0.0;
   return GG;
 }
@@ -114,7 +114,6 @@ double cost(const std::vector<double> &q, std::vector<double> &grad, void *data)
         Eigen::Vector3d xe = H0R.translation();
         Eigen::Vector3d xd(0.4,-0.055,0);
         Eigen::Vector3d cost = xe - xd;
-        double K = 1;
         // Gradient
         if(!grad.empty()){
         grad[0] = 2*dH0Rdq1.coeff(1,4)*(xe.coeff(1,1)-xd.coeff(1,1))+2*dH0Rdq1.coeff(2,4)*(xe.coeff(2,1)-xd.coeff(2,1))+2*dH0Rdq1.coeff(3,4)*(xe.coeff(3,1)-xd.coeff(3,1));
@@ -125,7 +124,7 @@ double cost(const std::vector<double> &q, std::vector<double> &grad, void *data)
         grad[5] = 2*dH0Rdq6.coeff(1,4)*(xe.coeff(1,1)-xd.coeff(1,1))+2*dH0Rdq6.coeff(2,4)*(xe.coeff(2,1)-xd.coeff(2,1))+2*dH0Rdq6.coeff(3,4)*(xe.coeff(3,1)-xd.coeff(3,1));
         grad[6] = 2*dH0Rdq7.coeff(1,4)*(xe.coeff(1,1)-xd.coeff(1,1))+2*dH0Rdq7.coeff(2,4)*(xe.coeff(2,1)-xd.coeff(2,1))+2*dH0Rdq1.coeff(3,4)*(xe.coeff(3,1)-xd.coeff(3,1));
         }
-        return cost.transpose()*K*cost;
+        return cost.transpose()*cost;
 }
 
 int main() {
